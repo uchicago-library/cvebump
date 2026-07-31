@@ -1,0 +1,13 @@
+(executable 
+ (public_name cvebump) 
+ (name cvebump)
+ (promote (until-clean))
+ (libraries camlp-streams prelude etude lib)) 
+
+(env
+ (dev
+  (flags (:standard -warn-error -A))))
+
+; Local Variables:
+; mode: dune
+; End:

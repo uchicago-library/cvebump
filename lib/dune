@@ -1,0 +1,15 @@
+(library
+ (name lib)
+ (libraries prelude etude data-encoding))
+
+(toplevel
+ (name repl)
+ (libraries prelude etude data-encoding lib))
+
+(env
+ (dev
+  (flags (:standard -warn-error -A))))
+
+; Local Variables:
+; mode: dune
+; End:
