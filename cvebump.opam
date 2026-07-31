@@ -19,6 +19,7 @@ depends: [
   "etude"
   "utop"
   "ocp-index"
+  "data-encoding"
   "merlin"
   "odoc" {with-doc}
 ]

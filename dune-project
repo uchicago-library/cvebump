@@ -16,6 +16,7 @@
    etude
    utop
    ocp-index
+   data-encoding
    merlin)
  (source (github your-username/your-repo)))
 
