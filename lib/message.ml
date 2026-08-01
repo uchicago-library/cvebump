@@ -1,24 +1,23 @@
 let x = 5
 
-let blessed_keys = [ "PkgName"; "InstalledVersion"; "FixedVersion" ]
+let blessed_keys =
+  [ "PkgName"; "InstalledVersion"; "FixedVersion" ]
 
 let string_to_string =
   let split s = Prelude.String.split ~sep:", " s in
   function
-  | (k, `String v) when List.mem k blessed_keys ->
-     Some (k, split v)
+  | k, `String v when List.mem k blessed_keys ->
+    Some (k, split v)
   | _ -> None
 
 let obj_to_alist =
   let open Etude.Option in
-  function | `O obj ->
-              List.map string_to_string obj
-              |> cat_options
-           | _ -> []
+  function
+  | `O obj -> List.map string_to_string obj |> cat_options
+  | _ -> []
 
-let arr_to_list =  function
-  | `A arr ->
-     List.map obj_to_alist arr
+let arr_to_list = function
+  | `A arr -> List.map obj_to_alist arr
   | _ -> []
 
 let safe_head = function
@@ -48,10 +47,17 @@ let coalesce_lists lists =
   map coalesce (traverse each_alist lists)
 
 (* let get_next current versions = *)
-let versions_example = [["4.2.30"; "5.2.13"; "6.0.4"]; ["4.2.30"; "5.2.13"; "6.0.4"];
-                        ["4.2.30"; "5.2.13"; "6.0.4"]; ["5.2.14"; "6.0.5"]; ["5.2.14"; "6.0.5"];
-                        ["4.2.30"; "5.2.13"; "6.0.4"]; ["4.2.30"; "5.2.13"; "6.0.4"];
-                        ["5.2.14"; "6.0.5"]; ["5.2.15"; "6.0.6"]]
+let versions_example =
+  [ [ "4.2.30"; "5.2.13"; "6.0.4" ];
+    [ "4.2.30"; "5.2.13"; "6.0.4" ];
+    [ "4.2.30"; "5.2.13"; "6.0.4" ];
+    [ "5.2.14"; "6.0.5" ];
+    [ "5.2.14"; "6.0.5" ];
+    [ "4.2.30"; "5.2.13"; "6.0.4" ];
+    [ "4.2.30"; "5.2.13"; "6.0.4" ];
+    [ "5.2.14"; "6.0.5" ];
+    [ "5.2.15"; "6.0.6" ]
+  ]
 
 (* let coalesce_lists lists =
  *   let open Etude.Option in
