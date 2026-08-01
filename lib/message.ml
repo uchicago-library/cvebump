@@ -34,11 +34,29 @@ let each_alist alist =
   let* fixed_versions =
     List.assoc_opt "FixedVersion" alist
   in
-  (* let comparison x y = *)
-    (* Prelude.on compare Prelude.version_of_string *)
-  (* in *)
-  (* pure (name, Prelude.maximumBy ~compare:comparison fixed_version) *)
-  assert false
+  let* installed_version =
+    List.assoc_opt "InstalledVersion" alist
+  in
+  let sort =
+    List.sort Prelude.(on compare version_of_string)
+  in
+  pure ((name, installed_version), sort fixed_versions)
+
+let coalesce_lists lists =
+  let open Prelude.List.Assoc in
+  let open Etude.Option in
+  map coalesce (traverse each_alist lists)
+
+(* let get_next current versions = *)
+let versions_example = [["4.2.30"; "5.2.13"; "6.0.4"]; ["4.2.30"; "5.2.13"; "6.0.4"];
+                        ["4.2.30"; "5.2.13"; "6.0.4"]; ["5.2.14"; "6.0.5"]; ["5.2.14"; "6.0.5"];
+                        ["4.2.30"; "5.2.13"; "6.0.4"]; ["4.2.30"; "5.2.13"; "6.0.4"];
+                        ["5.2.14"; "6.0.5"]; ["5.2.15"; "6.0.6"]]
+
+(* let coalesce_lists lists =
+ *   let open Etude.Option in
+ *   let+ traversed = traverse each_alist in
+ *   coalesce traversed *)
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
