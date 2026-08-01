@@ -27,19 +27,15 @@ let safe_head = function
 (* let rearrange_names lists = *)
 let each_alist alist =
   let open Etude.Option in
-  let* name =
-    List.assoc_opt "PkgName" alist >>= safe_head
-  in
-  let* fixed_versions =
-    List.assoc_opt "FixedVersion" alist
-  in
-  let* installed_version =
+  let+ name = List.assoc_opt "PkgName" alist >>= safe_head
+  and+ fixed_versions = List.assoc_opt "FixedVersion" alist
+  and+ installed_version =
     List.assoc_opt "InstalledVersion" alist
   in
   let sort =
     List.sort Prelude.(on compare version_of_string)
   in
-  pure ((name, installed_version), sort fixed_versions)
+  ((name, installed_version), sort fixed_versions)
 
 let coalesce_lists lists =
   let open Prelude.List.Assoc in
