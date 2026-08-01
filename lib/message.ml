@@ -73,6 +73,14 @@ let get_version current versionses =
   let+ nexts = get_nexts current versionses in
   get_max nexts
 
+let lists_to_report lists =
+  let each_pair ((name, current), versions) =
+    name, current, get_version current versions
+  in
+  coalesce_lists lists
+  |> Option.get
+  |> List.map each_pair
+
 (* # coalesce_lists lists |> Option.get |> List.map (fun ((name, current), versions) -> (name, current, get_version current versions));;
  * - : (string * string * string Etude.Option.t) list =
  * [("yaml", "1.10.2", Etude.Option.Some "1.10.3");
