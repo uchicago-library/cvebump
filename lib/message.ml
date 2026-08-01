@@ -33,7 +33,7 @@ let each_alist alist =
   let+ name = List.assoc_opt "PkgName" alist >>= safe_head
   and+ fixed_versions = List.assoc_opt "FixedVersion" alist
   and+ installed_version =
-    List.assoc_opt "InstalledVersion" alist
+    List.assoc_opt "InstalledVersion" alist >>= safe_head
   in
   let sort = List.sort version_compare in
   ((name, installed_version), sort fixed_versions)
@@ -73,21 +73,21 @@ let get_version current versionses =
   let+ nexts = get_nexts current versionses in
   get_max nexts
 
-(* # coalesce_lists lists |> Option.get |> List.map (fun ((name, current), versions) -> (name, get_version (List.hd current) versions));;
- * - : (string * string Etude.Option.t) list =
- * [("yaml", Etude.Option.Some "1.10.3");
- *  ("wagtail", Etude.Option.Some "7.0.7");
- *  ("urllib3", Etude.Option.Some "2.7.0");
- *  ("serialize-javascript", Etude.Option.Some "7.0.5");
- *  ("picomatch", Etude.Option.Some "2.3.2");
- *  ("lodash", Etude.Option.Some "4.18.0");
- *  ("js-yaml", Etude.Option.Some "4.3.0");
- *  ("flatted", Etude.Option.Some "3.4.2");
- *  ("brace-expansion", Etude.Option.Some "1.1.17");
- *  ("bleach", Etude.Option.Some "6.4.0");
- *  ("Pygments", Etude.Option.Some "2.20.0");
- *  ("Django", Etude.Option.Some "5.2.15");
- *  ("@babel/core", Etude.Option.Some "7.29.6")] *)
+(* # coalesce_lists lists |> Option.get |> List.map (fun ((name, current), versions) -> (name, current, get_version current versions));;
+ * - : (string * string * string Etude.Option.t) list =
+ * [("yaml", "1.10.2", Etude.Option.Some "1.10.3");
+ *  ("wagtail", "7.0.6", Etude.Option.Some "7.0.7");
+ *  ("urllib3", "2.6.3", Etude.Option.Some "2.7.0");
+ *  ("serialize-javascript", "7.0.4", Etude.Option.Some "7.0.5");
+ *  ("picomatch", "2.3.1", Etude.Option.Some "2.3.2");
+ *  ("lodash", "4.17.23", Etude.Option.Some "4.18.0");
+ *  ("js-yaml", "4.1.1", Etude.Option.Some "4.3.0");
+ *  ("flatted", "3.3.3", Etude.Option.Some "3.4.2");
+ *  ("brace-expansion", "1.1.12", Etude.Option.Some "1.1.17");
+ *  ("bleach", "3.3.0", Etude.Option.Some "6.4.0");
+ *  ("Pygments", "2.15.0", Etude.Option.Some "2.20.0");
+ *  ("Django", "5.2.12", Etude.Option.Some "5.2.15");
+ *  ("@babel/core", "7.29.0", Etude.Option.Some "7.29.6")] *)
 
 (* let coalesce_lists lists =
  *   let open Etude.Option in
