@@ -1,10 +1,21 @@
 let x = 5
 
 let blessed_keys =
-  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References" ]
+  [ "PkgName"; "InstalledVersion"; "FixedVersion" ]
 
-(* todo: figure out how to deal with References array to pull the CVE
-   URL out *)
+let get_url urls =
+  let is_cve_url url =
+    let regexp =
+      Str.regexp "^https://www.cve.org/CVERecord.*"
+    in
+    Str.string_match regexp url 0
+  in
+  match List.filter is_cve_url urls with
+  | url :: _ -> url
+  | _ -> ""
+
+(* todo: figure out how to deal with References array to
+   pull the CVE URL out *)
 let string_to_string =
   let split s = Prelude.String.split ~sep:", " s in
   function
@@ -28,17 +39,6 @@ let safe_head = function
 
 let version_compare = Prelude.(on compare version_of_string)
 let ( ->- ) x y = version_compare x y = 1
-
-let is_cve_url url =
-  let regexp =
-    Str.regexp "^https://www.cve.org/CVERecord.*"
-  in
-  Str.string_match regexp url 0
-
-let get_url urls =
-  match List.filter is_cve_url urls with
-  | url :: _ -> Some url
-  | _ -> None
 
 let each_alist alist =
   let open Etude.Option in
@@ -88,11 +88,17 @@ let get_version current versionses =
 let lists_to_report lists =
   let open Etude.Option in
   let each_pair ((name, current), versions) =
-    let+ version = get_version current versions
-    in name, current, version
+    let+ version = get_version current versions in
+    (name, current, version)
   in
   let* coalesced = coalesce_lists lists in
   traverse each_pair coalesced
+
+let string_to_report json_string =
+  json_string
+  |> Ezjsonm.from_string
+  |> arr_to_list
+  |> lists_to_report
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
