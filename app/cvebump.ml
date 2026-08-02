@@ -9,10 +9,11 @@ let () =
        %!"
       name installed fixed
   in
+  let create_output alist =
+    List.map each_row alist |> Prelude.join ~sep:"\n"
+  in
   match Lib.Process.string_to_report json_string with
-  | Some alist ->
-    print_string
-      (Prelude.join ~sep:"\n" @@ List.map each_row alist)
+  | Some alist -> alist |> create_output |> print_string
   | _ -> print_endline json_string
 
 (* Local Variables: *)
