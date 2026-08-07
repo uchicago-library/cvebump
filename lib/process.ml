@@ -100,6 +100,50 @@ let string_to_report json_string =
   |> arr_to_list
   |> lists_to_report
 
+type step =
+  | O of string
+  | A of int
+
+let rec find_path steps json =
+  let open Etude.Option in
+  match steps, json with
+  | [], json -> pure json
+  | O key :: stpz, `O obj ->
+     let* next = List.assoc_opt key obj
+     in find_path stpz next
+  | A idx :: stpz , `A arr ->
+     let* next = List.nth_opt arr idx
+     in find_path stpz next
+  | _, _ -> None
+
+let unstring = function
+  | `String s -> Some s
+  | _ -> None
+
+let unarray = function
+  | `A a -> Some a
+  | _ -> None
+
+let unobject = function
+  | `O o -> Some o
+  | _ -> None
+
+(* let each_platform json =
+ *   let open Etude.Option in
+ *   let+ typ = find_path [O "Type"] json >>= unstring
+ *   and+ packages = find_path [O "Packages"] json in
+ *   (typ, packages) *)
+
+let trivy_output_to_vulns json =
+  let open Etude.Option in
+  let* results = find_path [ O "Results" ] json >>= unarray in
+  let each_result json = find_path [ O "Vulnerabilities" ] json in
+  traverse each_result results
+  >>= traverse unarray
+  >>= traverse (traverse unobject)
+  >>| List.flatten
+
+
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
 
