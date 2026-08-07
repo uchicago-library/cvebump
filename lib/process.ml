@@ -1,7 +1,7 @@
 let x = 5
 
 let blessed_keys =
-  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References" ]
+  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References"; ]
 
 let get_url urls =
   let is_cve_url url =
@@ -134,19 +134,24 @@ let unobject = function
  *   and+ packages = find_path [O "Packages"] json in
  *   (typ, packages) *)
 
+let blessed (k, _) = List.mem k blessed_keys
+
 let trivy_output_to_vulns json =
   let open Etude.Option in
   let* results = find_path [ O "Results" ] json >>= unarray in
-  let each_result json = find_path [ O "Vulnerabilities" ] json in
-  let+ vulns = traverse each_result results
-               >>= traverse unarray
-               >>= traverse (traverse unobject)
+  let each_result json =
+    let+ vulns =
+      find_path [ O "Vulnerabilities" ] json >>= unarray
+      >>= traverse unobject
+    and+ target = find_path [ O "Type" ] json >>= unstring in
+    let filtered = List.map (List.filter blessed) vulns in
+    (target, filtered)
+  in
+  traverse each_result results
+  (* >>= traverse unarray *)
+  (* >>= traverse (traverse unobject) *)
 
 
-let pull_names_out vulns =
-  let open Etude.Option in
-  let blessed (k, _) = List.mem k blessed_keys in
-  List.map (List.filter blessed) vulns
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
