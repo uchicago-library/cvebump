@@ -136,7 +136,7 @@ let unobject = function
 
 let blessed (k, _) = List.mem k blessed_keys
 
-let trivy_output_to_vulns json =
+let trivy_output_to_platforms json =
   let open Etude.Option in
   let* results = find_path [ O "Results" ] json >>= unarray in
   let each_result json =
@@ -147,11 +147,37 @@ let trivy_output_to_vulns json =
     let filtered = List.map (List.filter blessed) vulns in
     (target, filtered)
   in
-  traverse each_result results
-  (* >>= traverse unarray *)
-  (* >>= traverse (traverse unobject) *)
+  let* platforms =
+    traverse each_result results
+  in
+  pure platforms
+
+let platforms_to_alist platforms =
+  let open Etude.Option in
+  let stringify = function
+    | (x, `A arr) ->
+       let* references = traverse unstring arr
+       in pure (x, references)
+    | (x, `String s) ->
+       let* str = unstring (`String s)
+       in pure (x, [str])
+    | _ -> None
+  in
+  let each_platform (platform, data) =
+    let+ processed = traverse (traverse stringify) data in
+    (platform, processed)
+  in
+  traverse each_platform platforms
 
 
+let json =
+  let s = Prelude.readfile "./full-example.json" in
+  Ezjsonm.from_string s
+
+let alist = trivy_output_to_platforms json
+            |> Option.get
+            |> List.hd
+            |> snd
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
