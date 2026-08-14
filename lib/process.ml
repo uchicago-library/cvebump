@@ -128,12 +128,6 @@ let unobject = function
   | `O o -> Some o
   | _ -> None
 
-(* let each_platform json =
- *   let open Etude.Option in
- *   let+ typ = find_path [O "Type"] json >>= unstring
- *   and+ packages = find_path [O "Packages"] json in
- *   (typ, packages) *)
-
 let blessed (k, _) = List.mem k blessed_keys
 
 let trivy_output_to_platforms json =
@@ -169,15 +163,6 @@ let platforms_to_alist platforms =
   in
   traverse each_platform platforms
 
-
-let json =
-  let s = Prelude.readfile "./full-example.json" in
-  Ezjsonm.from_string s
-
-let alist = trivy_output_to_platforms json
-            |> Option.get
-            |> List.hd
-            |> snd
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
