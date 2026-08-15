@@ -163,6 +163,27 @@ let platforms_to_alist platforms =
   in
   traverse each_platform platforms
 
+let not_coalesced json =
+  let open Etude.Option in
+  json
+  |> (trivy_output_to_platforms >=> platforms_to_alist)
+
+let alert =
+  let json =
+    Prelude.readfile "./full-example.json"
+    |> Ezjsonm.from_string
+  in
+  not_coalesced json
+  |> Option.get
+  |> List.hd
+  |> snd
+  |> List.hd
+
+let each_alert alert =
+  let open Etude.Option in
+  let* pkgname = List.assoc_opt "PkgName" alert in
+  let* new_assocs = assert false in
+  assert false
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
