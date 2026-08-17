@@ -146,12 +146,16 @@ let trivy_output_to_platforms json =
   in
   pure platforms
 
+let is_nist str =
+  Str.(string_partial_match (regexp "^https://nvd.nist.gov") str 0)
+
 let platforms_to_alist platforms =
   let open Etude.Option in
   let stringify = function
     | (x, `A arr) ->
-       let* references = traverse unstring arr
-       in pure (x, references)
+       let* references = traverse unstring arr in
+       let filtered = List.filter is_nist references in
+       pure (x, filtered)
     | (x, `String s) ->
        let* str = unstring (`String s)
        in pure (x, [str])
@@ -168,7 +172,7 @@ let not_coalesced json =
   json
   |> (trivy_output_to_platforms >=> platforms_to_alist)
 
-let alert =
+let alerts =
   let json =
     Prelude.readfile "./full-example.json"
     |> Ezjsonm.from_string
@@ -177,13 +181,13 @@ let alert =
   |> Option.get
   |> List.hd
   |> snd
-  |> List.hd
+  |> Prelude.take 4
 
 let each_alert alert =
   let open Etude.Option in
-  let* pkgname = List.assoc_opt "PkgName" alert in
-  let* new_assocs = assert false in
-  assert false
+  let* pkgname = List.assoc_opt "PkgName" alert >>= safe_head in
+  let new_assocs = List.remove_assoc "PkgName" alert in
+  pure (pkgname, new_assocs)
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
