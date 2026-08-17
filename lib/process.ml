@@ -181,13 +181,20 @@ let alerts =
   |> Option.get
   |> List.hd
   |> snd
-  |> Prelude.take 4
+  |> Prelude.take 15
 
 let each_alert alert =
   let open Etude.Option in
   let* pkgname = List.assoc_opt "PkgName" alert >>= safe_head in
   let new_assocs = List.remove_assoc "PkgName" alert in
   pure (pkgname, new_assocs)
+
+let process_alerts alerts =
+  let open Etude.Option in
+  let+ pkgname_in_front =
+    traverse each_alert alerts
+  in
+  Prelude.List.Assoc.coalesce pkgname_in_front
 
 (* jq command *)
 (* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
