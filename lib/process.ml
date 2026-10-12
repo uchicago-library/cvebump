@@ -1,7 +1,7 @@
 let x = 5
 
 let blessed_keys =
-  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References"; ]
+  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "InstalledVersion"; "References"; ]
 
 let get_url urls =
   let is_cve_url url =
@@ -149,12 +149,23 @@ let trivy_output_to_platforms json =
 let is_nist str =
   Str.(string_partial_match (regexp "^https://nvd.nist.gov") str 0)
 
+let is_github str =
+  Str.(string_match (regexp ".*GHSA-.*$") str 0)
+
 let platforms_to_alist platforms =
   let open Etude.Option in
   let stringify = function
     | (x, `A arr) ->
        let* references = traverse unstring arr in
-       let filtered = List.filter is_nist references in
+       let filtered =
+         let nists = List.filter is_nist references in
+         let githubs = List.filter is_github references in
+         match nists, githubs, references with
+         | [], [], [] -> []
+         | [], [], _ -> references
+         | [], _, _ -> githubs
+         | _ -> nists
+       in 
        pure (x, filtered)
     | (x, `String s) ->
        let* str = unstring (`String s)
@@ -172,11 +183,11 @@ let not_coalesced json =
   json
   |> (trivy_output_to_platforms >=> platforms_to_alist)
 
+let json =
+  Prelude.readfile "./full-example.json"
+  |> Ezjsonm.from_string
+
 let alerts =
-  let json =
-    Prelude.readfile "./full-example.json"
-    |> Ezjsonm.from_string
-  in
   not_coalesced json
   |> Option.get
   |> List.hd
@@ -205,6 +216,68 @@ let process_json json =
   in
   traverse each_platform nc
    (* |> Option.get |> List.map (fun (platform ,x) -> );; *)
+
+let js_yaml =
+  process_alerts alerts
+  |> Option.get
+  |> fun x -> List.nth x 1
+
+let get_all_versions (_, assocses) =
+  let open Etude.Option in
+  let each_assocs assocs  =
+    let+ versions = List.assoc_opt "FixedVersion" assocs
+    and+ current = List.assoc_opt "InstalledVersion" assocs 
+    and+ references = List.assoc_opt "References" assocs in
+    (current, versions, references)
+  in
+  traverse each_assocs assocses
+
+let version_compare = Prelude.(on compare version_of_string)
+let ( ->- ) x y = version_compare x y = 1
+
+let version_list_to_pairs avslist =
+  let each_triple (curr, fixed, _) =
+    let conc s = String.concat "" s in
+    let split s = Prelude.split ~sep:", " s
+                  |> List.map String.trim
+    in
+    (conc curr, split (conc fixed))
+  in
+  List.map each_triple avslist
+
+let safe_head = function
+  | x :: _ -> Some x
+  | _ -> None
+
+let each_version_pair (curr, fixed_versions) =
+  let ordering x = x ->- curr in
+  List.filter ordering fixed_versions |> safe_head
+
+(* TODO: fix this so that it returns an option, not a string *)
+let get_optimal_version version_pairs =
+  let open Etude.Option in
+  let versions pairs =
+    traverse each_version_pair pairs
+  in
+  match versions version_pairs with
+  | Some vps ->
+     Prelude.maximumBy ~compare:version_compare vps
+  | None -> ""
+
+(* TODO: modify this in light of the above *)
+let process_triples triples =
+  let open Etude.Option in
+  let currs =
+    let each_triple (x,_,_) = x in
+    List.map each_triple triples
+  in
+  let refs =
+    let each_triple (_,_,r) = r in
+    List.map each_triple triples
+  in
+  let optimal_version = get_optimal_version currs in
+  assert false
+
 
 (* jq command *)
            (* trivy fs -
