@@ -196,8 +196,19 @@ let process_alerts alerts =
   in
   Prelude.List.Assoc.coalesce pkgname_in_front
 
+let process_json json =
+  let open Etude.Option in
+  let* nc = not_coalesced json in
+  let each_platform (platform, alrtz) =
+    let+ alerts = traverse each_alert alrtz in
+    (platform, alerts)
+  in
+  traverse each_platform nc
+   (* |> Option.get |> List.map (fun (platform ,x) -> );; *)
+
 (* jq command *)
-(* trivy fs --quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
+           (* trivy fs -
+-quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
 
 (* Local Variables: *)
 (* mode: tuareg *)
