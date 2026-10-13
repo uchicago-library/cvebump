@@ -14,8 +14,6 @@ let get_url urls =
   | url :: _ -> url
   | _ -> ""
 
-(* todo: figure out how to deal with References array to
-   pull the CVE URL out *)
 let string_to_string =
   let split s = Prelude.String.split ~sep:", " s in
   function
@@ -183,20 +181,11 @@ let not_coalesced json =
   json
   |> (trivy_output_to_platforms >=> platforms_to_alist)
 
-
-
 let each_alert alert =
   let open Etude.Option in
   let* pkgname = List.assoc_opt "PkgName" alert >>= safe_head in
   let new_assocs = List.remove_assoc "PkgName" alert in
   pure (pkgname, new_assocs)
-
-let process_alerts alerts =
-  let open Etude.Option in
-  let+ pkgname_in_front =
-    traverse each_alert alerts
-  in
-  Prelude.List.Assoc.coalesce pkgname_in_front
 
 let process_json json =
   let open Etude.Option in
@@ -206,16 +195,18 @@ let process_json json =
     (platform, alerts)
   in
   traverse each_platform nc
-   (* |> Option.get |> List.map (fun (platform ,x) -> );; *)
 
-
-
-let version_compare = Prelude.(on compare version_of_string)
-let ( ->- ) x y = version_compare x y = 1
-
-let safe_head = function
-  | x :: _ -> Some x
-  | _ -> None
+let each_assocs assocs =
+  let open Etude.Option in
+  let conc s = String.concat "" s in
+  let split s = Prelude.split ~sep:", " s
+                |> List.map String.trim
+  in
+  let+ versions_str = List.assoc_opt "FixedVersion" assocs 
+  and+ current = List.assoc_opt "InstalledVersion" assocs 
+  and+ references = List.assoc_opt "References" assocs
+  in
+  conc current, split (conc versions_str), references
 
 let each_version_triple (curr, fixed_versions, _) =
   let ordering x = x ->- curr in
@@ -237,30 +228,6 @@ let process_triples triples =
   in
   let+ optimal_version = get_optimal_version triples in
   (optimal_version, List.concat refs)
-
-let map_tuple f (l, r) =
-  (l, f r)
-
-let each_assocs assocs =
-  let open Etude.Option in
-  let conc s = String.concat "" s in
-  let split s = Prelude.split ~sep:", " s
-                |> List.map String.trim
-  in
-  let+ versions_str = List.assoc_opt "FixedVersion" assocs 
-  and+ current = List.assoc_opt "InstalledVersion" assocs 
-  and+ references = List.assoc_opt "References" assocs
-  in
-  conc current, split (conc versions_str), references
-
-(* let each_vuln (v, cves) = *)
-  (* let open Etude.Option in *)
-  (* (v, map each_assocs cves) *)
-
-  (* let+ triples = traverse each_assocs cves in *)
-  (* (v, process_triples triples) *)
-
-(* START HERE, JEEZ *)
 
 (* convert trivy output to alist *)
 let trivy_output_to_alist = process_json
@@ -331,8 +298,3 @@ let alerts =
   |> List.hd
   |> snd
   |> Prelude.take 15
-
-let js_yaml =
-  process_alerts alerts
-  |> Option.get
-  |> fun x -> List.nth x 1
