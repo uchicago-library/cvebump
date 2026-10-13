@@ -222,67 +222,64 @@ let js_yaml =
   |> Option.get
   |> fun x -> List.nth x 1
 
-let get_all_versions (_, assocses) =
-  let open Etude.Option in
-  let each_assocs assocs  =
-    let+ versions = List.assoc_opt "FixedVersion" assocs
-    and+ current = List.assoc_opt "InstalledVersion" assocs 
-    and+ references = List.assoc_opt "References" assocs in
-    (current, versions, references)
-  in
-  traverse each_assocs assocses
 
 let version_compare = Prelude.(on compare version_of_string)
 let ( ->- ) x y = version_compare x y = 1
-
-let version_list_to_pairs avslist =
-  let each_triple (curr, fixed, _) =
-    let conc s = String.concat "" s in
-    let split s = Prelude.split ~sep:", " s
-                  |> List.map String.trim
-    in
-    (conc curr, split (conc fixed))
-  in
-  List.map each_triple avslist
 
 let safe_head = function
   | x :: _ -> Some x
   | _ -> None
 
-let each_version_pair (curr, fixed_versions) =
+let each_version_triple (curr, fixed_versions, _) =
   let ordering x = x ->- curr in
   List.filter ordering fixed_versions |> safe_head
 
-(* TODO: fix this so that it returns an option, not a string *)
-let get_optimal_version version_pairs =
+let get_optimal_version version_triples =
   let open Etude.Option in
-  let versions pairs =
-    traverse each_version_pair pairs
+  let versions trips =
+    traverse each_version_triple trips
   in
-  match versions version_pairs with
-  | Some vps ->
-     Prelude.maximumBy ~compare:version_compare vps
-  | None -> ""
+  let+ vs = versions version_triples in
+  Prelude.maximumBy ~compare:version_compare vs
 
-(* TODO: modify this in light of the above *)
 let process_triples triples =
   let open Etude.Option in
-  let currs =
-    let each_triple (x,_,_) = x in
-    List.map each_triple triples
-  in
   let refs =
     let each_triple (_,_,r) = r in
     List.map each_triple triples
   in
-  let optimal_version = get_optimal_version currs in
-  assert false
+  let+ optimal_version = get_optimal_version triples in
+  (optimal_version, refs)
 
+let map_tuple f (l, r) =
+  (l, f r)
 
-(* jq command *)
-           (* trivy fs -
--quiet --scanners vuln --format json library_website | jq '.Results[]?.Vulnerabilities | select (. != null)[] | {"PkgName" : .PkgName, "InstalledVersion" : .InstalledVersion, "FixedVersion": .FixedVersion, "Severity" : .Severity }' | jq -n '[inputs]' > cvebump/example.json *)
+let each_assocs assocs =
+  let open Etude.Option in
+  let conc s = String.concat "" s in
+  let split s = Prelude.split ~sep:", " s
+                |> List.map String.trim
+  in
+  let+ versions_str = List.assoc_opt "FixedVersion" assocs 
+  and+ current = List.assoc_opt "InstalledVersion" assocs 
+  and+ references = List.assoc_opt "References" assocs
+  in
+  conc current, split (conc versions_str), references
 
-(* Local Variables: *)
-(* mode: tuareg *)
-(* End: *)
+(* let each_vuln (v, cves) = *)
+  (* let open Etude.Option in *)
+  (* (v, map each_assocs cves) *)
+
+  (* let+ triples = traverse each_assocs cves in *)
+  (* (v, process_triples triples) *)
+
+let do_everything json =
+  let open Etude.Option in
+  let* uncoalesced = process_json json in
+  let coalesced =
+    let each_platform (name, packages) =
+      (name, Prelude.List.Assoc.coalesce packages)
+    in
+    List.map each_platform uncoalesced
+  in
+  pure coalesced
