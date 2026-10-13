@@ -183,16 +183,7 @@ let not_coalesced json =
   json
   |> (trivy_output_to_platforms >=> platforms_to_alist)
 
-let json =
-  Prelude.readfile "./full-example.json"
-  |> Ezjsonm.from_string
 
-let alerts =
-  not_coalesced json
-  |> Option.get
-  |> List.hd
-  |> snd
-  |> Prelude.take 15
 
 let each_alert alert =
   let open Etude.Option in
@@ -217,10 +208,6 @@ let process_json json =
   traverse each_platform nc
    (* |> Option.get |> List.map (fun (platform ,x) -> );; *)
 
-let js_yaml =
-  process_alerts alerts
-  |> Option.get
-  |> fun x -> List.nth x 1
 
 
 let version_compare = Prelude.(on compare version_of_string)
@@ -232,7 +219,7 @@ let safe_head = function
 
 let each_version_triple (curr, fixed_versions, _) =
   let ordering x = x ->- curr in
-  List.filter ordering fixed_versions |> safe_head
+  List.filter ordering (List.sort version_compare fixed_versions) |> safe_head
 
 let get_optimal_version version_triples =
   let open Etude.Option in
@@ -249,7 +236,7 @@ let process_triples triples =
     List.map each_triple triples
   in
   let+ optimal_version = get_optimal_version triples in
-  (optimal_version, refs)
+  (optimal_version, List.concat refs)
 
 let map_tuple f (l, r) =
   (l, f r)
@@ -273,13 +260,79 @@ let each_assocs assocs =
   (* let+ triples = traverse each_assocs cves in *)
   (* (v, process_triples triples) *)
 
-let do_everything json =
+(* START HERE, JEEZ *)
+
+(* convert trivy output to alist *)
+let trivy_output_to_alist = process_json
+
+(* for debugging: just coalesces *)
+let trivy_to_coalesced_alist json =
   let open Etude.Option in
-  let* uncoalesced = process_json json in
-  let coalesced =
-    let each_platform (name, packages) =
-      (name, Prelude.List.Assoc.coalesce packages)
-    in
-    List.map each_platform uncoalesced
+  let+ uncoalesced = process_json json in
+  let each_platform (name, packages) =
+    (name, Prelude.List.Assoc.coalesce packages)
   in
-  pure coalesced
+  List.map each_platform uncoalesced
+
+(* helper function for traversing into each package *)
+let traverse_inside_packages f alist =
+  let open Etude.Option in
+  let each_platform (pltfrm, pkgs) =
+    let each_package (pkg, vulns) =
+      let+ vs = f vulns in
+      (pkg, vs)
+    in
+    let+ ps = traverse each_package pkgs
+    in (pltfrm, ps)
+  in
+  traverse each_platform alist
+
+(* for debugging: just converts each vulnerability alist into
+   triples *)
+let coalesced_to_triples alist =
+  let open Etude.Option in
+  traverse_inside_packages (traverse each_assocs) alist
+
+(* converts each list of triples into a recommended version *)
+let coalesced_to_versions alist =
+  let open Etude.Option in
+  traverse_inside_packages
+    (traverse each_assocs >=> process_triples)
+    alist
+
+(* converts trivy output to my output *)
+let trivy_to_output json =
+  let open Etude.Option in
+  trivy_to_coalesced_alist json >>= coalesced_to_versions
+
+(* TESTING *)
+
+let json =
+  Prelude.readfile "./full-example.json"
+  |> Ezjsonm.from_string
+
+let shorten_for_testing n alist =
+  let each_platform (pltfrm, pkgs) =
+    let each_package (pkg, vulns) =
+      (pkg, Prelude.List.take n vulns)
+    in
+    (pltfrm, Prelude.List.take n (List.map each_package pkgs))
+  in List.map each_platform alist
+  
+let test_json =
+  json
+  |> trivy_to_coalesced_alist
+  |> Option.value ~default:[]
+  |> shorten_for_testing 3
+
+let alerts =
+  not_coalesced json
+  |> Option.get
+  |> List.hd
+  |> snd
+  |> Prelude.take 15
+
+let js_yaml =
+  process_alerts alerts
+  |> Option.get
+  |> fun x -> List.nth x 1
