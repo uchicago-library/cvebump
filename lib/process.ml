@@ -1,57 +1,14 @@
-let x = 5
-
-let blessed_keys =
-  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "InstalledVersion"; "References"; ]
-
-let get_url urls =
-  let is_cve_url url =
-    let regexp =
-      Str.regexp "^https://www.cve.org/CVERecord.*"
-    in
-    Str.string_match regexp url 0
-  in
-  match List.filter is_cve_url urls with
-  | url :: _ -> url
-  | _ -> ""
-
-let string_to_string =
-  let split s = Prelude.String.split ~sep:", " s in
-  function
-  | k, `String v when List.mem k blessed_keys ->
-    Some (k, split v)
-  | _ -> None
-
-let obj_to_alist =
-  let open Etude.Option in
-  function
-  | `O obj -> List.map string_to_string obj |> cat_options
-  | _ -> []
-
-let arr_to_list = function
-  | `A arr -> List.map obj_to_alist arr
-  | _ -> []
+let version_compare = Prelude.(on compare version_of_string)
+let ( ->- ) x y = version_compare x y = 1
 
 let safe_head = function
   | x :: _ -> Some x
   | _ -> None
 
-let version_compare = Prelude.(on compare version_of_string)
-let ( ->- ) x y = version_compare x y = 1
+let blessed_keys =
+  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References"; ]
 
-let each_alist alist =
-  let open Etude.Option in
-  let+ name = List.assoc_opt "PkgName" alist >>= safe_head
-  and+ fixed_versions = List.assoc_opt "FixedVersion" alist
-  and+ installed_version =
-    List.assoc_opt "InstalledVersion" alist >>= safe_head
-  in
-  let sort = List.sort version_compare in
-  ((name, installed_version), sort fixed_versions)
-
-let coalesce_lists lists =
-  let open Prelude.List.Assoc in
-  let open Etude.Option in
-  map coalesce (traverse each_alist lists)
+let blessed (k, _) = List.mem k blessed_keys
 
 let current_version = "5.2.12"
 
@@ -66,37 +23,6 @@ let versions_example =
     [ "5.2.14"; "6.0.5" ];
     [ "5.2.15"; "6.0.6" ]
   ]
-
-let each_list current versions =
-  let ordering x = x ->- current in
-  List.filter ordering versions |> safe_head
-
-let get_nexts current versionses =
-  let open Etude.Option in
-  traverse (each_list current) versionses
-
-let get_version current versionses =
-  let open Etude.Option in
-  let get_max =
-    Prelude.maximumBy ~compare:version_compare
-  in
-  let+ nexts = get_nexts current versionses in
-  get_max nexts
-
-let lists_to_report lists =
-  let open Etude.Option in
-  let each_pair ((name, current), versions) =
-    let+ version = get_version current versions in
-    (name, current, version)
-  in
-  let* coalesced = coalesce_lists lists in
-  traverse each_pair coalesced
-
-let string_to_report json_string =
-  json_string
-  |> Ezjsonm.from_string
-  |> arr_to_list
-  |> lists_to_report
 
 type step =
   | O of string
@@ -125,8 +51,6 @@ let unarray = function
 let unobject = function
   | `O o -> Some o
   | _ -> None
-
-let blessed (k, _) = List.mem k blessed_keys
 
 let trivy_output_to_platforms json =
   let open Etude.Option in
@@ -208,10 +132,12 @@ let each_assocs assocs =
   in
   conc current, split (conc versions_str), references
 
+(* get the next highest version up from the current version *)
 let each_version_triple (curr, fixed_versions, _) =
   let ordering x = x ->- curr in
   List.filter ordering (List.sort version_compare fixed_versions) |> safe_head
 
+(* take list of triples to optimal version number *)
 let get_optimal_version version_triples =
   let open Etude.Option in
   let versions trips =
@@ -220,6 +146,7 @@ let get_optimal_version version_triples =
   let+ vs = versions version_triples in
   Prelude.maximumBy ~compare:version_compare vs
 
+(* compute optimal version & gather references into a list *)
 let process_triples triples =
   let open Etude.Option in
   let refs =
@@ -274,7 +201,7 @@ let trivy_to_output json =
 
 (* TESTING *)
 
-let json =
+let json () =
   Prelude.readfile "./full-example.json"
   |> Ezjsonm.from_string
 
@@ -286,14 +213,14 @@ let shorten_for_testing n alist =
     (pltfrm, Prelude.List.take n (List.map each_package pkgs))
   in List.map each_platform alist
   
-let test_json =
-  json
+let test_json () =
+  (json ())
   |> trivy_to_coalesced_alist
   |> Option.value ~default:[]
   |> shorten_for_testing 3
 
-let alerts =
-  not_coalesced json
+let alerts () =
+  not_coalesced (json ())
   |> Option.get
   |> List.hd
   |> snd
