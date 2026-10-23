@@ -102,8 +102,7 @@ let platforms_to_alist platforms =
 
 let not_coalesced json =
   let open Etude.Option in
-  json
-  |> (trivy_output_to_platforms >=> platforms_to_alist)
+  (trivy_output_to_platforms >=> platforms_to_alist) json
 
 let each_alert alert =
   let open Etude.Option in
