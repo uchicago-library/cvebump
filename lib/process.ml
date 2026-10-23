@@ -72,7 +72,7 @@ let is_nist str =
   Str.(string_partial_match (regexp "^https://nvd.nist.gov") str 0)
 
 let is_github str =
-  Str.(string_match (regexp ".*GHSA-.*$") str 0)
+  Str.(string_match (regexp ".*github.com/advisories.*GHSA-.*$") str 0)
 
 let platforms_to_alist platforms =
   let open Etude.Option in
@@ -199,11 +199,25 @@ let trivy_to_output json =
   let open Etude.Option in
   trivy_to_coalesced_alist json >>= coalesced_to_versions
 
+let back_to_json alist =
+  let string s = `String s in
+  let each_vuln (vname, (version, links)) =
+    (vname, `O [ ("UpgradeTo", `String version);
+                 ("References", `A (List.map string links))])
+  in
+  let each_platform (pname, pvulns) =
+    (pname, `O (List.map each_vuln pvulns))
+  in
+  `O (List.map each_platform alist)
+  
+
 (* TESTING *)
 
-let json () =
-  Prelude.readfile "./full-example.json"
-  |> Ezjsonm.from_string
+let path = "./fresh-example.json"
+
+let json path =
+  Prelude.readfile path
+  |> Ezjsonm.from_string 
 
 let shorten_for_testing n alist =
   let each_platform (pltfrm, pkgs) =
@@ -214,13 +228,13 @@ let shorten_for_testing n alist =
   in List.map each_platform alist
   
 let test_json () =
-  (json ())
+  (json path)
   |> trivy_to_coalesced_alist
   |> Option.value ~default:[]
   |> shorten_for_testing 3
 
 let alerts () =
-  not_coalesced (json ())
+  not_coalesced (json path)
   |> Option.get
   |> List.hd
   |> snd
