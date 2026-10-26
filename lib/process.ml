@@ -72,7 +72,7 @@ let is_nist str =
   Str.(string_partial_match (regexp "^https://nvd.nist.gov") str 0)
 
 let is_github str =
-  Str.(string_match (regexp ".*github.com/advisories.*GHSA-.*$") str 0)
+  Str.(string_match (regexp ".*github.com/.*/security/advisories/GHSA-.*$") str 0)
 
 let platforms_to_alist platforms =
   let open Etude.Option in
@@ -198,7 +198,13 @@ let trivy_to_output json =
   let open Etude.Option in
   trivy_to_coalesced_alist json >>= coalesced_to_versions
 
-let back_to_json alist =
+let trivy_to_final_output json =
+  let open Etude.Option in
+  let+ project = find_path [ O "ArtifactName" ] json >>= unstring
+  and+ output = trivy_to_output json in
+  (project, output)
+
+let back_to_json (name, alist) =
   let string s = `String s in
   let each_vuln (vname, (version, links)) =
     (vname, `O [ ("UpgradeTo", `String version);
@@ -207,7 +213,7 @@ let back_to_json alist =
   let each_platform (pname, pvulns) =
     (pname, `O (List.map each_vuln pvulns))
   in
-  `O (List.map each_platform alist)
+  `O [(name, `O (List.map each_platform alist))]
   
 
 (* TESTING *)
@@ -238,3 +244,18 @@ let alerts () =
   |> List.hd
   |> snd
   |> Prelude.take 15
+
+(* executable *)
+
+let main () =
+  let open Etude.Option in 
+  let open In_channel in
+  let json_string = input_all stdin in
+  let json = Ezjsonm.from_string json_string in
+  let processed =
+    let+ output_json = trivy_to_final_output json in
+    back_to_json output_json
+  in
+  match processed with
+  | Some json -> Json.print json
+  | _ -> ()
