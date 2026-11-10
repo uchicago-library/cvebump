@@ -2,7 +2,7 @@ let version_compare = Prelude.(on compare version_of_string)
 let ( ->- ) x y = version_compare x y = 1
 
 let blessed_keys =
-  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References"; ]
+  [ "PkgName"; "InstalledVersion"; "FixedVersion"; "References"; "AnalyzedBy" ]
 
 let string_to_string =
   let split s = Prelude.String.split ~sep:", " s in

@@ -1,1 +1,1 @@
-let () = Lib.Process.main ()
+let () = Lib.Legacy.main ()
