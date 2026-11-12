@@ -21,7 +21,7 @@ module FromJSON = struct
       references ;
       platform_name }
 
-  let stub_encoding =
+  let trivy_encoding =
     let open Data_encoding in
     weaken
       (obj1
@@ -39,32 +39,55 @@ module FromJSON = struct
                                  (req "FixedVersion" string)
                                  (req "References" (list string)))))))))))
 
-  let parse_ j =
-    let open Data_encoding in
-    Json.destruct stub_encoding j
-
-  let parse enc j =
+  let parse_ enc j =
     let open Data_encoding in
     Json.destruct enc j
+
+  let parse j = parse_ trivy_encoding j
 end
 
+module CleanupRecord = struct
+  let is_nist str =
+    Str.(string_partial_match (regexp "^https://nvd.nist.gov") str 0)
 
+  let is_github str =
+    Str.(string_match (regexp ".*github.com/.*/security/advisories/GHSA-.*$") str 0)
 
-(* module CoalescedByPkg = struct *)
-(*   type t = string * FromJSON.t *)
-(*   let to_alist = function *)
-(*     | { FromJSON.package_name ; _ } as fj -> package_name, fj *)
-(*   let coalesce fromjsons = *)
-(*     let keys_added = List.map to_alist fromjsons in *)
-(*     Prelude.List.Assoc.coalesce keys_added *)
-(* end *)
+  let choose_link links =
+    let nists = List.filter is_nist links in
+    let githubs = List.filter is_github links in
+    match nists, githubs with
+    | [], [] -> []
+    | [], _ -> githubs
+    | _ -> nists
 
-(* module CoalescedByPackage = struct *)
-(*   type vuln_info = { installed_version : string list ; *)
-(*                      fixed_version : string list ; *)
-(*                      references : string list ; *)
-(*                      platform_name : string ; } *)
-(*   type package = string *)
-(*   type t = package * vuln_info list *)
-(* end *)
+  let fix_references platforms =
+    let each_vuln (pkg, i, f, refs) =
+      (pkg, i, f, choose_link refs)
+    in
+    let each_platform (platform, vulns) =
+      (platform, List.map each_vuln vulns)
+    in
+    List.map each_platform platforms
 
+  let fix_fixed_versions platforms =
+    let each_vuln (pkg, i, f, refs) =
+      (pkg, i, Prelude.String.split ~sep:", " f, refs)
+    in
+    let each_platform (platform, vulns) =
+      (platform, List.map each_vuln vulns)
+    in
+    List.map each_platform platforms
+end
+
+module ComputeVersion = struct
+  let coalesce platforms =
+    let each_vuln (pkg, i, f, refs) =
+      pkg, (i, f, refs)
+    in
+    let each_platform (platform, vulns) =
+      let c = Prelude.List.Assoc.coalesce in
+      (platform, c (List.map each_vuln vulns))
+    in
+    List.map each_platform platforms
+end
