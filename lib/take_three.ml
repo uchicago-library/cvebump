@@ -1,8 +1,10 @@
 let weaken encoding =
   let open Data_encoding in
-  conv (fun x -> ((), x)) (fun ((), x) -> x) (merge_objs unit encoding)
+  conv
+    (fun x -> ((), x))
+    (fun ((), x) -> x)
+    (merge_objs unit encoding)
 
-(* the first datatype we parse the Trivy JSON into *)
 module FromJSON = struct
   let trivy_encoding =
     let open Data_encoding in
@@ -22,12 +24,12 @@ module FromJSON = struct
                                  (req "FixedVersion" string)
                                  (req "References" (list string)))))))))))
 
-  let parse_ enc j =
+  let parse j =
     let open Data_encoding in
-    Json.destruct enc j
-
-  let parse j = parse_ trivy_encoding j
+    Json.destruct trivy_encoding j
 end
+
+let parse = FromJSON.parse
 
 module CleanupRecord = struct
   let is_nist str =
@@ -63,6 +65,9 @@ module CleanupRecord = struct
     List.map each_platform platforms
 end
 
+let fix_references = CleanupRecord.fix_references
+let fix_fixed_versions = CleanupRecord.fix_fixed_versions
+
 module Coalesce = struct
   let coalesce platforms =
     let each_vuln (pkg, i, f, refs) =
@@ -75,8 +80,15 @@ module Coalesce = struct
     List.map each_platform platforms
 end
 
-let version_compare = Prelude.(on compare version_of_string)
-let ( ->- ) x y = version_compare x y = 1
+let coalesce = Coalesce.coalesce
+
+module Comparison = struct
+  let version_compare = Prelude.(on compare version_of_string)
+  let ( ->- ) x y = version_compare x y = 1
+end
+
+let version_compare = Comparison.version_compare
+let ( ->- ) = Comparison.( ->- )
 
 module NextVersionsUp = struct
   let each_list installed (fixeds, refs) = 
@@ -95,12 +107,14 @@ module NextVersionsUp = struct
     List.map each_platform platforms
 end
 
+let get_next_versions = NextVersionsUp.get_next_versions
+
 module MaxVersion = struct
   let each_vuln ((pkg, installed), lists) =
     let versions = List.map fst lists in
     let max = Prelude.maximumBy ~compare:version_compare versions in
     let refs = List.concat (List.map snd lists) in
-    (pkg, installed, max, refs)
+    pkg, (installed, max, refs)
 
   let get_max_version platforms =
     let each_platform (platform, vulns) =
@@ -109,22 +123,45 @@ module MaxVersion = struct
     List.map each_platform platforms
 end
 
+let get_max_version = MaxVersion.get_max_version
+
 module ProcessAlist = struct
   let restructure_alist platforms =
     platforms
-    |> CleanupRecord.fix_references
-    |> CleanupRecord.fix_fixed_versions
-    |> Coalesce.coalesce
-    |> NextVersionsUp.get_next_versions
-    |> MaxVersion.get_max_version
+    |> fix_references
+    |> fix_fixed_versions
+    |> coalesce
+    |> get_next_versions
+    |> get_max_version
 end
-
-let j = Process.(json path)
-
-let parse = FromJSON.parse
 
 let restructure_alist = ProcessAlist.restructure_alist
 
 module BackToJSON = struct
-  
+  let enc =
+    let open Data_encoding in
+    assoc
+      (assoc
+         (obj3
+            (req "installed-version" string)
+            (req "goto" string)
+            (req "references" (list string))))
+
+  let serialize platforms =
+    let open Data_encoding.Json in
+    construct enc platforms
 end
+
+let serialize = BackToJSON.serialize
+
+let main () =
+  match Sys.argv with
+  | [|_|] -> (let open In_channel in
+             let json_string = input_all stdin in
+             let json = Ezjsonm.from_string json_string in
+             let parsed = parse json in
+             parsed
+             |> restructure_alist
+             |> serialize
+             |> Json.print)
+  | _ -> print_endline "george"
