@@ -15,7 +15,7 @@ module FromJSON = struct
                (weaken
                   (obj2
                      (req "Type" string)
-                     (req "Vulnerabilities"
+                     (opt "Vulnerabilities"
                         (list
                            (weaken
                               (obj4
@@ -30,6 +30,18 @@ module FromJSON = struct
 end
 
 let parse = FromJSON.parse
+
+module CatOptions = struct
+  let cat_options platforms =
+    let each_platform (platform, vulns_opt) =
+      match vulns_opt with
+      | Some vulns -> [(platform, vulns)]
+      | None -> []
+    in
+    Etude.List.bind platforms each_platform
+end
+
+let cat_options = CatOptions.cat_options
 
 module CleanupRecord = struct
   let is_nist str =
@@ -128,6 +140,7 @@ let get_max_version = MaxVersion.get_max_version
 module ProcessAlist = struct
   let restructure_alist platforms =
     platforms
+    |> cat_options
     |> fix_references
     |> fix_fixed_versions
     |> coalesce
