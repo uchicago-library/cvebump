@@ -9,7 +9,8 @@ module FromJSON = struct
   let trivy_encoding =
     let open Data_encoding in
     weaken
-      (obj1
+      (obj2
+         (req "ArtifactName" string)
          (req "Results"
             (list
                (weaken
@@ -32,13 +33,13 @@ end
 let parse = FromJSON.parse
 
 module CatOptions = struct
-  let cat_options platforms =
+  let cat_options (path, platforms) =
     let each_platform (platform, vulns_opt) =
       match vulns_opt with
       | Some vulns -> [(platform, vulns)]
       | None -> []
     in
-    Etude.List.bind platforms each_platform
+    (path, Etude.List.bind platforms each_platform)
 end
 
 let cat_options = CatOptions.cat_options
@@ -58,30 +59,30 @@ module CleanupRecord = struct
     | [], _ -> githubs
     | _ -> nists
 
-  let fix_references platforms =
+  let fix_references (path, platforms) =
     let each_vuln (pkg, i, f, refs) =
       (pkg, i, f, choose_link refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    List.map each_platform platforms
+    (path, List.map each_platform platforms)
 
-  let fix_fixed_versions platforms =
+  let fix_fixed_versions (path, platforms) =
     let each_vuln (pkg, i, f, refs) =
       (pkg, i, Prelude.String.split ~sep:", " f, refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    List.map each_platform platforms
+    (path, List.map each_platform platforms)
 end
 
 let fix_references = CleanupRecord.fix_references
 let fix_fixed_versions = CleanupRecord.fix_fixed_versions
 
 module Coalesce = struct
-  let coalesce platforms =
+  let coalesce (path, platforms) =
     let each_vuln (pkg, i, f, refs) =
       (pkg, i), (f, refs)
     in
@@ -89,7 +90,7 @@ module Coalesce = struct
       let c = Prelude.List.Assoc.coalesce in
       (platform, c (List.map each_vuln vulns))
     in
-    List.map each_platform platforms
+    (path, List.map each_platform platforms)
 end
 
 let coalesce = Coalesce.coalesce
@@ -106,7 +107,8 @@ module NextVersionsUp = struct
   let each_list installed (fixeds, refs) = 
     let ordering x = x ->- installed in
     let filtered = List.filter ordering fixeds in
-    let sorted = List.sort version_compare filtered in
+    let sorted = List.sort version_compare filtered
+                 |> Prelude.List.take 1 in
     (String.concat "" sorted, refs)
 
   let each_platform (platform, vulns) =
@@ -115,8 +117,8 @@ module NextVersionsUp = struct
     in
     (platform, List.map each_vuln vulns)
 
-  let get_next_versions platforms =
-    List.map each_platform platforms
+  let get_next_versions (path, platforms) =
+    (path, List.map each_platform platforms)
 end
 
 let get_next_versions = NextVersionsUp.get_next_versions
@@ -128,24 +130,25 @@ module MaxVersion = struct
     let refs = List.concat (List.map snd lists) in
     pkg, (installed, max, refs)
 
-  let get_max_version platforms =
+  let get_max_version (path, platforms) =
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    List.map each_platform platforms
+    (path, List.map each_platform platforms)
 end
 
 let get_max_version = MaxVersion.get_max_version
 
 module ProcessAlist = struct
   let restructure_alist platforms =
-    platforms
-    |> cat_options
-    |> fix_references
-    |> fix_fixed_versions
-    |> coalesce
-    |> get_next_versions
-    |> get_max_version
+    let tup = platforms
+              |> cat_options
+              |> fix_references
+              |> fix_fixed_versions
+              |> coalesce
+              |> get_next_versions
+              |> get_max_version
+    in [tup]
 end
 
 let restructure_alist = ProcessAlist.restructure_alist
@@ -155,10 +158,11 @@ module BackToJSON = struct
     let open Data_encoding in
     assoc
       (assoc
-         (obj3
-            (req "installed-version" string)
-            (req "goto" string)
-            (req "references" (list string))))
+         (assoc
+            (obj3
+               (req "installed-version" string)
+               (req "goto" string)
+               (req "references" (list string)))))
 
   let serialize platforms =
     let open Data_encoding.Json in
