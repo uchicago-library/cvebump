@@ -46,6 +46,7 @@ module CatOptions = struct
       [ (path, Etude.List.bind platforms each_platform) ]
 end
 
+(* TODO: take it from here *)
 let cat_options = CatOptions.cat_options
 
 module CleanupRecord = struct
