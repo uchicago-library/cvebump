@@ -196,12 +196,16 @@ module BackToJSON = struct
                (req "goto" string)
                (req "references" (list string)) ) ) )
 
-  let serialize platforms =
+  let decode_one platforms =
     let open Data_encoding.Json in
     construct enc platforms
+
+  let decode_many platforms =
+    let open Data_encoding in
+    Json.construct (list enc) platforms
 end
 
-let serialize = BackToJSON.serialize
+let decode_many = BackToJSON.decode_many
 
 let main () =
   match Sys.argv with
@@ -211,12 +215,12 @@ let main () =
     let json_strings =
       Prelude.String.split ~sep:"\n" read_in
     in
-    let jsons = List.map Ezjsonm.from_string json_strings in
-    let parsed = List.map parse jsons in
-    parsed
+    json_strings
+    |> List.map Ezjsonm.from_string
+    |> List.map parse
     |> List.map restructure_alist
-    |> List.map serialize
-    |> List.iter Json.print
+    |> decode_many
+    |> Json.print
   | _ -> print_endline "george"
 
 (* let str = Prelude.readfile "wagtail.json"
