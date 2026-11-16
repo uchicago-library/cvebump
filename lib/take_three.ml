@@ -34,17 +34,26 @@ end
 let parse = FromJSON.parse
 
 module CatOptions = struct
-  let cat_options (path, platforms_opt) =
+  let populated =
+    function | _, [] -> false
+             | _ -> true
+  
+  let cat_options paths =
     let open Etude.List in
-    match platforms_opt with
-    | None -> []
-    | Some platforms ->
-      let each_platform (platform, vulns_opt) =
-        match vulns_opt with
-        | Some vulns -> [ (platform, vulns) ]
-        | None -> []
-      in
-      [ (path, platforms >>= each_platform) ]
+    let each_path (path, platforms_opt) =
+      match platforms_opt with
+      | None -> []
+      | Some platforms ->
+         let each_platform (platform, vulns_opt) =
+           match vulns_opt with
+           | Some vulns -> [ (platform, vulns) ]
+           | None -> []
+         in
+         [ (path, platforms >>= each_platform) ]
+    in
+    List.map each_path paths
+    |> List.concat
+    |> List.filter populated
 end
 
 let cat_options = CatOptions.cat_options
@@ -174,19 +183,14 @@ end
 let get_max_version = MaxVersion.get_max_version
 
 module ProcessAlist = struct
-  let nonempty = function | _, [] -> false
-                          | _ -> true
-  
   let restructure_jsons platform_jsons =
     platform_jsons
-    |> List.map cat_options
-    |> List.map fix_references
-    |> List.map fix_fixed_versions
-    |> List.map coalesce
-    |> List.map get_next_versions
-    |> List.map get_max_version
-    |> List.concat
-    |> List.filter nonempty
+    |> cat_options
+    |> fix_references
+    |> fix_fixed_versions
+    |> coalesce
+    |> get_next_versions
+    |> get_max_version
 end
 
 let restructure_jsons = ProcessAlist.restructure_jsons
@@ -229,6 +233,6 @@ let main () =
      |> Json.print
   | _ -> print_endline "george"
 
-(* let str = Prelude.readfile "two.json" *)
-(* let j = Ezjsonm.from_string str *)
-(* let strings = Prelude.String.split ~sep:"\n" str *)
+let str = Prelude.readfile "two.json"
+let j = Ezjsonm.from_string str
+let strings = Prelude.String.split ~sep:"\n" str
