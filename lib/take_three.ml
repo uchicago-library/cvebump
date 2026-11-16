@@ -207,10 +207,16 @@ let main () =
   match Sys.argv with
   | [|_|] ->
     let open In_channel in
-    let json_string = input_all stdin in
-    let json = Ezjsonm.from_string json_string in
-    let parsed = parse json in
-    parsed |> restructure_alist |> serialize |> Json.print
+    let read_in = input_all stdin in
+    let json_strings =
+      Prelude.String.split ~sep:"\n" read_in
+    in
+    let jsons = List.map Ezjsonm.from_string json_strings in
+    let parsed = List.map parse jsons in
+    parsed
+    |> List.map restructure_alist
+    |> List.map serialize
+    |> List.iter Json.print
   | _ -> print_endline "george"
 
 (* let str = Prelude.readfile "wagtail.json"
