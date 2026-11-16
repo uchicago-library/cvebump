@@ -233,6 +233,6 @@ let main () =
      |> Json.print
   | _ -> print_endline "george"
 
-let str = Prelude.readfile "two.json"
-let j = Ezjsonm.from_string str
-let strings = Prelude.String.split ~sep:"\n" str
+(* let str = Prelude.readfile "two.json" *)
+(* let j = Ezjsonm.from_string str *)
+(* let strings = Prelude.String.split ~sep:"\n" str *)
