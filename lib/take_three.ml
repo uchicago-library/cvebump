@@ -35,6 +35,7 @@ let parse = FromJSON.parse
 
 module CatOptions = struct
   let cat_options (path, platforms_opt) =
+    let open Etude.List in
     match platforms_opt with
     | None -> []
     | Some platforms ->
@@ -43,7 +44,7 @@ module CatOptions = struct
         | Some vulns -> [ (platform, vulns) ]
         | None -> []
       in
-      [ (path, Etude.List.bind platforms each_platform) ]
+      [ (path, platforms >>= each_platform) ]
 end
 
 let cat_options = CatOptions.cat_options
@@ -173,17 +174,22 @@ end
 let get_max_version = MaxVersion.get_max_version
 
 module ProcessAlist = struct
-  let restructure_alist platforms =
-    platforms
-    |> cat_options
-    |> fix_references
-    |> fix_fixed_versions
-    |> coalesce
-    |> get_next_versions
-    |> get_max_version
+  let nonempty = function | _, [] -> false
+                          | _ -> true
+  
+  let restructure_jsons platform_jsons =
+    platform_jsons
+    |> List.map cat_options
+    |> List.map fix_references
+    |> List.map fix_fixed_versions
+    |> List.map coalesce
+    |> List.map get_next_versions
+    |> List.map get_max_version
+    |> List.concat
+    |> List.filter nonempty
 end
 
-let restructure_alist = ProcessAlist.restructure_alist
+let restructure_jsons = ProcessAlist.restructure_jsons
 
 module BackToJSON = struct
   let enc =
@@ -210,18 +216,19 @@ let decode_many = BackToJSON.decode_many
 let main () =
   match Sys.argv with
   | [|_|] ->
-    let open In_channel in
-    let read_in = input_all stdin in
-    let json_strings =
-      Prelude.String.split ~sep:"\n" read_in
-    in
-    json_strings
-    |> List.map Ezjsonm.from_string
-    |> List.map parse
-    |> List.map restructure_alist
-    |> decode_many
-    |> Json.print
+     let open In_channel in
+     let read_in = input_all stdin in
+     let json_strings =
+       Prelude.String.split ~sep:"\n" read_in
+     in
+     json_strings
+     |> List.map Ezjsonm.from_string
+     |> List.map parse
+     |> restructure_jsons
+     |> BackToJSON.decode_one
+     |> Json.print
   | _ -> print_endline "george"
 
-(* let str = Prelude.readfile "wagtail.json"
- * let j = Ezjsonm.from_string str *)
+(* let str = Prelude.readfile "two.json" *)
+(* let j = Ezjsonm.from_string str *)
+(* let strings = Prelude.String.split ~sep:"\n" str *)
