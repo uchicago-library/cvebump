@@ -46,7 +46,6 @@ module CatOptions = struct
       [ (path, Etude.List.bind platforms each_platform) ]
 end
 
-(* TODO: take it from here *)
 let cat_options = CatOptions.cat_options
 
 module CleanupRecord = struct
@@ -71,30 +70,36 @@ module CleanupRecord = struct
     | [], _ -> githubs
     | _ -> nists
 
-  let fix_references (path, platforms) =
+  let fix_references paths =
     let each_vuln (pkg, i, f, refs) =
       (pkg, i, f, choose_link refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    (path, List.map each_platform platforms)
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
 
-  let fix_fixed_versions (path, platforms) =
+  let fix_fixed_versions paths =
     let each_vuln (pkg, i, f, refs) =
       (pkg, i, Prelude.String.split ~sep:", " f, refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    (path, List.map each_platform platforms)
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
 end
 
 let fix_references = CleanupRecord.fix_references
 let fix_fixed_versions = CleanupRecord.fix_fixed_versions
 
 module Coalesce = struct
-  let coalesce (path, platforms) =
+  let coalesce paths =
     let each_vuln (pkg, i, f, refs) =
       ((pkg, i), (f, refs))
     in
@@ -102,7 +107,10 @@ module Coalesce = struct
       let c = Prelude.List.Assoc.coalesce in
       (platform, c (List.map each_vuln vulns))
     in
-    (path, List.map each_platform platforms)
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
 end
 
 let coalesce = Coalesce.coalesce
@@ -134,8 +142,11 @@ module NextVersionsUp = struct
     in
     (platform, List.map each_vuln vulns)
 
-  let get_next_versions (path, platforms) =
-    (path, List.map each_platform platforms)
+  let get_next_versions paths =
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
 end
 
 let get_next_versions = NextVersionsUp.get_next_versions
@@ -149,28 +160,30 @@ module MaxVersion = struct
     let refs = List.concat (List.map snd lists) in
     (pkg, (installed, max, refs))
 
-  let get_max_version (path, platforms) =
+  let get_max_version paths =
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
-    (path, List.map each_platform platforms)
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
 end
 
 let get_max_version = MaxVersion.get_max_version
 
-(* module ProcessAlist = struct
- *   let restructure_alist platforms =
- *     let tup = platforms
- *               |> cat_options
- *               |> fix_references
- *               |> fix_fixed_versions
- *               |> coalesce
- *               |> get_next_versions
- *               |> get_max_version
- *     in [tup]
- * end *)
+module ProcessAlist = struct
+  let restructure_alist platforms =
+    platforms
+    |> cat_options
+    |> fix_references
+    |> fix_fixed_versions
+    |> coalesce
+    |> get_next_versions
+    |> get_max_version
+end
 
-(* let restructure_alist = ProcessAlist.restructure_alist *)
+let restructure_alist = ProcessAlist.restructure_alist
 
 module BackToJSON = struct
   let enc =
@@ -189,14 +202,16 @@ module BackToJSON = struct
 end
 
 let serialize = BackToJSON.serialize
-let main () = ()
-(* match Sys.argv with
- * | [|_|] -> (let open In_channel in
- *            let json_string = input_all stdin in
- *            let json = Ezjsonm.from_string json_string in
- *            let parsed = parse json in
- *            parsed
- *            |> restructure_alist
- *            |> serialize
- *            |> Json.print)
- * | _ -> print_endline "george" *)
+
+let main () =
+  match Sys.argv with
+  | [|_|] ->
+    let open In_channel in
+    let json_string = input_all stdin in
+    let json = Ezjsonm.from_string json_string in
+    let parsed = parse json in
+    parsed |> restructure_alist |> serialize |> Json.print
+  | _ -> print_endline "george"
+
+(* let str = Prelude.readfile "wagtail.json"
+ * let j = Ezjsonm.from_string str *)
