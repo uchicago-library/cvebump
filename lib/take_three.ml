@@ -29,27 +29,31 @@ module FromJSON = struct
   let parse j =
     let open Data_encoding in
     Json.destruct trivy_encoding j
+
+  let parse_array j =
+    let open Data_encoding in
+    Json.destruct (list trivy_encoding) j
 end
 
 let parse = FromJSON.parse
 
 module CatOptions = struct
-  let populated =
-    function | _, [] -> false
-             | _ -> true
-  
+  let populated = function
+    | _, [] -> false
+    | _ -> true
+
   let cat_options paths =
     let open Etude.List in
     let each_path (path, platforms_opt) =
       match platforms_opt with
       | None -> []
       | Some platforms ->
-         let each_platform (platform, vulns_opt) =
-           match vulns_opt with
-           | Some vulns -> [ (platform, vulns) ]
-           | None -> []
-         in
-         [ (path, platforms >>= each_platform) ]
+        let each_platform (platform, vulns_opt) =
+          match vulns_opt with
+          | Some vulns -> [ (platform, vulns) ]
+          | None -> []
+        in
+        [ (path, platforms >>= each_platform) ]
     in
     List.map each_path paths
     |> List.concat
@@ -220,17 +224,17 @@ let decode_many = BackToJSON.decode_many
 let main () =
   match Sys.argv with
   | [|_|] ->
-     let open In_channel in
-     let read_in = input_all stdin in
-     let json_strings =
-       Prelude.String.split ~sep:"\n" read_in
-     in
-     json_strings
-     |> List.map Ezjsonm.from_string
-     |> List.map parse
-     |> restructure_jsons
-     |> BackToJSON.decode_one
-     |> Json.print
+    let open In_channel in
+    let read_in = input_all stdin in
+    let json_strings =
+      Prelude.String.split ~sep:"\n" read_in
+    in
+    json_strings
+    |> List.map Ezjsonm.from_string
+    |> List.map parse
+    |> restructure_jsons
+    |> BackToJSON.decode_one
+    |> Json.print
   | _ -> print_endline "george"
 
 (* let str = Prelude.readfile "two.json" *)
