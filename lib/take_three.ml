@@ -27,12 +27,41 @@ module FromJSON = struct
                                  (req "References"
                                     (list string) ) ) ) ) ) ) ) ) ) )
 
-  let parse j =
+  let parse_exn j =
     let open Data_encoding in
     Json.destruct trivy_encoding j
+
+  let handler =
+    let open Data_encoding in
+    function
+    | Data_encoding.Json.Cannot_destruct _ as e ->
+      Format.asprintf "%a"
+        (Json.print_error ?print_unknown:None)
+        e
+    | e -> raise e
+
+  let parse_res j =
+    Prelude.Result.trap handler parse_exn j
+    |> Result.map Etude.List.pure
+
+  let parse_array_exn j =
+    let open Data_encoding in
+    Json.destruct (list trivy_encoding) j
+
+  let parse_array_res j =
+    Prelude.Result.trap handler parse_array_exn j
+
+  let parse j =
+    match parse_res j with
+    | Ok _ as ok -> ok
+    | Error e1 -> match parse_array_res j with
+                 | Ok _ as ok -> ok
+                 | Error _ -> Error e1
 end
 
 let parse = FromJSON.parse
+let parse_exn = FromJSON.parse_exn
+let parse_array_exn = FromJSON.parse_array_exn
 
 module CatOptions = struct
   let populated =
@@ -197,7 +226,7 @@ end
 let restructure_jsons = ProcessAlist.restructure_jsons
 
 module BackToJSON = struct
-  let enc =
+  let encoder =
     let open Data_encoding in
     assoc
       (assoc
@@ -208,33 +237,32 @@ module BackToJSON = struct
                (req "goto" string)
                (req "references" (list string)) ) ) )
 
-  let decode_one platforms =
+  let encode platforms =
     let open Data_encoding.Json in
-    construct enc platforms
-
-  let decode_many platforms =
-    let open Data_encoding in
-    Json.construct (list enc) platforms
+    construct encoder platforms
 end
 
-let decode_many = BackToJSON.decode_many
+let decode_many = BackToJSON.encode
+
+let print_result = function
+  | Ok json -> Json.print json
+  | _ -> ()
 
 let main () =
   match Sys.argv with
   | [|_|] ->
      let open In_channel in
-     let read_in = input_all stdin in
-     let json_strings =
-       Prelude.String.split ~sep:"\n" read_in
-     in
-     json_strings
-     |> List.map Ezjsonm.from_string
-     |> List.map parse
-     |> restructure_jsons
-     |> BackToJSON.decode_one
-     |> Json.print
+     let (>>|) x f = Result.map f x in
+     let json_string = input_all stdin in
+     json_string
+     |> Ezjsonm.from_string
+     |> parse
+     >>| restructure_jsons
+     >>| BackToJSON.encode
+     |> print_result
   | _ -> print_endline "george"
 
-(* let str = Prelude.readfile "two.json" *)
-(* let j = Ezjsonm.from_string str *)
-(* let strings = Prelude.String.split ~sep:"\n" str *)
+(* let str1 = Prelude.readfile "full-example.json" *)
+(* let j1 = Ezjsonm.from_string str1 *)
+(* let str2 = Prelude.readfile "two.json" *)
+(* let j2 = Ezjsonm.from_string str2 *)
