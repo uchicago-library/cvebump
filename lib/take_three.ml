@@ -18,8 +18,9 @@ module FromJSON = struct
                      (opt "Vulnerabilities"
                         (list
                            (weaken
-                              (obj4
+                              (obj5
                                  (req "PkgName" string)
+                                 (req "Severity" string)
                                  (req "InstalledVersion"
                                     string )
                                  (req "FixedVersion" string)
@@ -81,8 +82,8 @@ module CleanupRecord = struct
     | _ -> nists
 
   let fix_references paths =
-    let each_vuln (pkg, i, f, refs) =
-      (pkg, i, f, choose_link refs)
+    let each_vuln (pkg, s, i, f, refs) =
+      (pkg, s, i, f, choose_link refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
@@ -93,8 +94,8 @@ module CleanupRecord = struct
     List.map each_path paths
 
   let fix_fixed_versions paths =
-    let each_vuln (pkg, i, f, refs) =
-      (pkg, i, Prelude.String.split ~sep:", " f, refs)
+    let each_vuln (pkg, s, i, f, refs) =
+      (pkg, s, i, Prelude.String.split ~sep:", " f, refs)
     in
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
@@ -110,8 +111,8 @@ let fix_fixed_versions = CleanupRecord.fix_fixed_versions
 
 module Coalesce = struct
   let coalesce paths =
-    let each_vuln (pkg, i, f, refs) =
-      ((pkg, i), (f, refs))
+    let each_vuln (pkg, s, i, f, refs) =
+      ((pkg, s, i), (f, refs))
     in
     let each_platform (platform, vulns) =
       let c = Prelude.List.Assoc.coalesce in
@@ -146,8 +147,8 @@ module NextVersionsUp = struct
     (String.concat "" sorted, refs)
 
   let each_platform (platform, vulns) =
-    let each_vuln ((pkg, installed), frefses) =
-      ( (pkg, installed),
+    let each_vuln ((pkg, severity, installed), frefses) =
+      ( (pkg, severity, installed),
         List.map (each_list installed) frefses )
     in
     (platform, List.map each_vuln vulns)
@@ -162,13 +163,13 @@ end
 let get_next_versions = NextVersionsUp.get_next_versions
 
 module MaxVersion = struct
-  let each_vuln ((pkg, installed), lists) =
+  let each_vuln ((pkg, severity, installed), lists) =
     let versions = List.map fst lists in
     let max =
       Prelude.maximumBy ~compare:version_compare versions
     in
     let refs = List.concat (List.map snd lists) in
-    (pkg, (installed, max, refs))
+    (pkg, (severity, installed, max, refs))
 
   let get_max_version paths =
     let each_platform (platform, vulns) =
@@ -201,7 +202,8 @@ module BackToJSON = struct
     assoc
       (assoc
          (assoc
-            (obj3
+            (obj4
+               (req "severity" string)
                (req "installed-version" string)
                (req "goto" string)
                (req "references" (list string)) ) ) )
