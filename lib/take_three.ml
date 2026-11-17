@@ -30,9 +30,23 @@ module FromJSON = struct
     let open Data_encoding in
     Json.destruct trivy_encoding j
 
+  let handler =
+    let open Data_encoding in
+    function
+    | Data_encoding.Json.Cannot_destruct _ as e ->
+      Format.asprintf "%a"
+        (Json.print_error ?print_unknown:None)
+        e
+    | e -> raise e
+
+  let parse_res j = Prelude.Result.trap handler parse j
+
   let parse_array j =
     let open Data_encoding in
     Json.destruct (list trivy_encoding) j
+
+  let parse_array_res j =
+    Prelude.Result.trap handler parse_array j
 end
 
 let parse = FromJSON.parse
