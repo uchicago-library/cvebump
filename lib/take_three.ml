@@ -103,11 +103,26 @@ module CatOptions = struct
     in
     List.map each_path paths
 
+  let remove_vs paths =
+    let each_vuln (pkg, s, i, f, refs) =
+      let new_i =
+        Prelude.String.dropwhile (fun c -> c = 'v') i
+      in (pkg, s, new_i, f, refs)
+    in
+    let each_platform (platform, vulns) =
+      (platform, List.map each_vuln vulns)
+    in
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
+
   let cat_options paths =
     paths
     |> cat_options_results
     |> cat_options_vulnerabilities
     |> fixed_options_to_strings
+    |> remove_vs
 end
 
 let cat_options = CatOptions.cat_options
@@ -268,25 +283,23 @@ end
 
 let decode_many = BackToJSON.encode
 
-let main _ = ()
+let print_result = function
+  | Ok json -> Json.print json
+  | _ -> ()
 
-(* let print_result = function *)
-(*   | Ok json -> Json.print json *)
-(*   | _ -> () *)
-
-(* let main () = *)
-(*   match Sys.argv with *)
-(*   | [|_|] -> *)
-(*      let open In_channel in *)
-(*      let (>>|) x f = Result.map f x in *)
-(*      let json_string = input_all stdin in *)
-(*      json_string *)
-(*      |> Ezjsonm.from_string *)
-(*      |> parse *)
-(*      >>| restructure_jsons *)
-(*      >>| BackToJSON.encode *)
-(*      |> print_result *)
-(*   | _ -> print_endline "george" *)
+let main () =
+  match Sys.argv with
+  | [|_|] ->
+     let open In_channel in
+     let (>>|) x f = Result.map f x in
+     let json_string = input_all stdin in
+     json_string
+     |> Ezjsonm.from_string
+     |> parse
+     >>| restructure_jsons
+     >>| BackToJSON.encode
+     |> print_result
+  | _ -> print_endline "george"
 
 let str1 = Prelude.readfile "full-example.json"
 let j1 = Ezjsonm.from_string str1
