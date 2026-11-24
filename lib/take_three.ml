@@ -195,8 +195,11 @@ end
 let coalesce = Coalesce.coalesce
 
 module Comparison = struct
-  let version_compare =
-    Prelude.(on compare version_of_string)
+  let version_compare x y =
+    match x, y with
+    | "NONE", _ -> 1
+    | _, "NONE" -> -1
+    | x, y -> Prelude.(on compare version_of_string) x y
 
   let ( ->- ) x y = version_compare x y = 1
 end
@@ -285,7 +288,7 @@ let decode_many = BackToJSON.encode
 
 let print_result = function
   | Ok json -> Json.print json
-  | _ -> ()
+  | Error e -> failwith e
 
 let main () =
   match Sys.argv with
