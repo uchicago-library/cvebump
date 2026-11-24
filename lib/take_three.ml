@@ -304,8 +304,8 @@ let main () =
      |> print_result
   | _ -> print_endline "george"
 
-let str1 = Prelude.readfile "full-example.json"
-let j1 = Ezjsonm.from_string str1
-let str2 = Prelude.readfile "giraffe.json"
-let j2 = Ezjsonm.from_string str2
+(* let str1 = Prelude.readfile "full-example.json" *)
+(* let j1 = Ezjsonm.from_string str1 *)
+(* let str2 = Prelude.readfile "giraffe.json" *)
+(* let j2 = Ezjsonm.from_string str2 *)
 
