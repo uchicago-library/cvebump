@@ -21,9 +21,8 @@ module FromJSON = struct
                               (obj5
                                  (req "PkgName" string)
                                  (req "Severity" string)
-                                 (req "InstalledVersion"
-                                    string )
-                                 (req "FixedVersion" string)
+                                 (req "InstalledVersion" string)
+                                 (opt "FixedVersion" string)
                                  (req "References"
                                     (list string) ) ) ) ) ) ) ) ) ) )
 
@@ -54,9 +53,9 @@ module FromJSON = struct
   let parse j =
     match parse_res j with
     | Ok _ as ok -> ok
-    | Error e1 -> match parse_array_res j with
+    | Error _e1 -> match parse_array_res j with
                  | Ok _ as ok -> ok
-                 | Error _ -> Error e1
+                 | Error e2 -> Error e2
 end
 
 let parse = FromJSON.parse
@@ -64,26 +63,51 @@ let parse_exn = FromJSON.parse_exn
 let parse_array_exn = FromJSON.parse_array_exn
 
 module CatOptions = struct
-  let populated = function
-    | _, [] -> false
-    | _ -> true
 
-  let cat_options paths =
-    let open Etude.List in
+  let cat_options_results paths =
+    let open Etude.Option in 
     let each_path (path, platforms_opt) =
-      match platforms_opt with
-      | None -> []
-      | Some platforms ->
-        let each_platform (platform, vulns_opt) =
-          match vulns_opt with
-          | Some vulns -> [ (platform, vulns) ]
-          | None -> []
-        in
-        [ (path, platforms >>= each_platform) ]
+      let+ platforms = platforms_opt
+      in (path, platforms)
     in
     List.map each_path paths
-    |> List.concat
-    |> List.filter populated
+    |> cat_options
+
+  let cat_options_vulnerabilities paths =
+    let open Etude.Option in
+    let each_platform (platform, vulns_opt) =
+      let+ vulns = vulns_opt
+      in (platform, vulns)
+    in
+    let each_path (path, platforms) =
+      let ps = List.map each_platform platforms
+               |> cat_options
+      in
+      (path, ps)
+    in
+    List.map each_path paths
+
+  let fixed_options_to_strings paths =
+    let each_vuln (pkg, s, i, f_opt, refs) =
+      let fixed = match f_opt with
+        | Some s -> s
+        | None -> "NONE"
+      in
+      (pkg, s, i, fixed, refs)
+    in
+    let each_platform (platform, vulns) =
+      (platform, List.map each_vuln vulns)
+    in
+    let each_path (path, platforms) =
+      (path, List.map each_platform platforms)
+    in
+    List.map each_path paths
+
+  let cat_options paths =
+    paths
+    |> cat_options_results
+    |> cat_options_vulnerabilities
+    |> fixed_options_to_strings
 end
 
 let cat_options = CatOptions.cat_options
@@ -244,25 +268,28 @@ end
 
 let decode_many = BackToJSON.encode
 
-let print_result = function
-  | Ok json -> Json.print json
-  | _ -> ()
+let main _ = ()
 
-let main () =
-  match Sys.argv with
-  | [|_|] ->
-     let open In_channel in
-     let (>>|) x f = Result.map f x in
-     let json_string = input_all stdin in
-     json_string
-     |> Ezjsonm.from_string
-     |> parse
-     >>| restructure_jsons
-     >>| BackToJSON.encode
-     |> print_result
-  | _ -> print_endline "george"
+(* let print_result = function *)
+(*   | Ok json -> Json.print json *)
+(*   | _ -> () *)
 
-(* let str1 = Prelude.readfile "full-example.json" *)
-(* let j1 = Ezjsonm.from_string str1 *)
-(* let str2 = Prelude.readfile "two.json" *)
-(* let j2 = Ezjsonm.from_string str2 *)
+(* let main () = *)
+(*   match Sys.argv with *)
+(*   | [|_|] -> *)
+(*      let open In_channel in *)
+(*      let (>>|) x f = Result.map f x in *)
+(*      let json_string = input_all stdin in *)
+(*      json_string *)
+(*      |> Ezjsonm.from_string *)
+(*      |> parse *)
+(*      >>| restructure_jsons *)
+(*      >>| BackToJSON.encode *)
+(*      |> print_result *)
+(*   | _ -> print_endline "george" *)
+
+let str1 = Prelude.readfile "full-example.json"
+let j1 = Ezjsonm.from_string str1
+let str2 = Prelude.readfile "giraffe.json"
+let j2 = Ezjsonm.from_string str2
+
