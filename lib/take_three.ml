@@ -26,7 +26,7 @@ module FromJSON = struct
                                  (req "References"
                                     (list string) ) ) ) ) ) ) ) ) ) )
 
-  let parse_exn j =
+  let parse_res_exn j =
     let open Data_encoding in
     Json.destruct trivy_encoding j
 
@@ -40,7 +40,7 @@ module FromJSON = struct
     | e -> raise e
 
   let parse_res j =
-    Prelude.Result.trap handler parse_exn j
+    Prelude.Result.trap handler parse_res_exn j
     |> Result.map Etude.List.pure
 
   let parse_array_exn j =
@@ -59,7 +59,7 @@ module FromJSON = struct
 end
 
 let parse = FromJSON.parse
-let parse_exn = FromJSON.parse_exn
+let parse_res_exn = FromJSON.parse_res_exn
 let parse_array_exn = FromJSON.parse_array_exn
 
 module CatOptions = struct
@@ -71,7 +71,7 @@ module CatOptions = struct
       in (path, platforms)
     in
     List.map each_path paths
-    |> cat_options
+    |> Etude.Option.cat_options
 
   let cat_options_vulnerabilities paths =
     let open Etude.Option in
