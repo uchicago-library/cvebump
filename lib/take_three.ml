@@ -180,7 +180,7 @@ let fix_fixed_versions = CleanupRecord.fix_fixed_versions
 module Coalesce = struct
   let coalesce paths =
     let each_vuln (pkg, s, i, f, refs) =
-      ((pkg, s, i), (f, refs))
+      ((pkg, i), (f, [s], refs))
     in
     let each_platform (platform, vulns) =
       let c = Prelude.List.Assoc.coalesce in
@@ -202,24 +202,43 @@ module Comparison = struct
     | x, y -> Prelude.(on compare version_of_string) x y
 
   let ( ->- ) x y = version_compare x y = 1
+
+  let severity_ranking =
+    ["UNKNOWN"; "LOW"; "MEDIUM"; "HIGH"; "CRITICAL"]
+
+  let find_index thing lst =
+    let rec find_index' thing idx = function
+      | [] -> None
+      | (x :: xs) -> if thing = x
+                     then Some idx
+                     else find_index' thing (idx + 1) xs
+  
+    in
+    find_index' thing 0 lst
+
+  let severity_compare x y =
+    compare
+      (find_index x severity_ranking)
+      (find_index y severity_ranking)
 end
 
 let version_compare = Comparison.version_compare
+let severity_compare = Comparison.severity_compare
 let ( ->- ) = Comparison.( ->- )
 
 module NextVersionsUp = struct
-  let each_list installed (fixeds, refs) =
+  let each_list installed (fixeds, severity_list, refs) =
     let ordering x = x ->- installed in
     let filtered = List.filter ordering fixeds in
     let sorted =
       List.sort version_compare filtered
       |> Prelude.List.take 1
     in
-    (String.concat "" sorted, refs)
+    (String.concat "" sorted, severity_list, refs)
 
   let each_platform (platform, vulns) =
-    let each_vuln ((pkg, severity, installed), frefses) =
-      ( (pkg, severity, installed),
+    let each_vuln ((pkg, installed), frefses) =
+      ( (pkg, installed),
         List.map (each_list installed) frefses )
     in
     (platform, List.map each_vuln vulns)
@@ -233,16 +252,24 @@ end
 
 let get_next_versions = NextVersionsUp.get_next_versions
 
-module MaxVersion = struct
-  let each_vuln ((pkg, severity, installed), lists) =
-    let versions = List.map fst lists in
-    let max =
+module Maxes = struct
+  let first (x,_,_) = x
+  let second (_,y,_) = y
+  let third (_,_,z) = z
+
+  let each_vuln ((pkg, installed), lists) =
+    let versions = List.map first lists in
+    let max_version =
       Prelude.maximumBy ~compare:version_compare versions
     in
-    let refs = List.concat (List.map snd lists) in
-    (pkg, (severity, installed, max, refs))
+    let severities = List.concat (List.map second lists) in
+    let max_severity =
+      Prelude.maximumBy ~compare:severity_compare severities
+    in
+    let refs = List.concat (List.map third lists) in
+    (pkg, (max_severity, installed, max_version, refs))
 
-  let get_max_version paths =
+  let get_maxes paths =
     let each_platform (platform, vulns) =
       (platform, List.map each_vuln vulns)
     in
@@ -252,7 +279,7 @@ module MaxVersion = struct
     List.map each_path paths
 end
 
-let get_max_version = MaxVersion.get_max_version
+let get_maxes = Maxes.get_maxes
 
 module ProcessAlist = struct
   let restructure_jsons platform_jsons =
@@ -262,7 +289,7 @@ module ProcessAlist = struct
     |> fix_fixed_versions
     |> coalesce
     |> get_next_versions
-    |> get_max_version
+    |> get_maxes
 end
 
 let restructure_jsons = ProcessAlist.restructure_jsons
